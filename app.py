@@ -12,7 +12,7 @@ headers = {
     "Authorization": f"Bearer {HF_TOKEN}"
 }
 
-# 🔥 CACHE MEMORY
+# 🔥 CACHE
 cache = {}
 
 def get_hash(text):
@@ -28,34 +28,45 @@ def scan_email():
 
     text_hash = get_hash(text)
 
-    # 🔥 CACHE HIT
+    # ✅ CACHE HIT
     if text_hash in cache:
         return jsonify(cache[text_hash])
 
     try:
         response = requests.post(API_URL, headers=headers, json={"inputs": text})
-        result = response.json()[0]
 
-        label = result["label"]
-        score = result["score"]
+        hf_output = response.json()
+        print("🔥 HF RAW:", hf_output)
 
-        output = {
-            "email_prediction": 1 if label == "phishing" else 0,
-            "confidence": round(score * 100, 2)
-        }
+        # ✅ SAFE PARSING
+        if isinstance(hf_output, list) and len(hf_output) > 0:
+            result = hf_output[0][0]  # 🔥 FIXED
 
-        # 🔥 SAVE CACHE
+            label = result.get("label", "unknown")
+            score = result.get("score", 0)
+
+            output = {
+                "email_prediction": 1 if label.lower() == "phishing" else 0,
+                "confidence": round(score * 100, 2)
+            }
+
+        else:
+            return jsonify({"error": "Invalid model response"}), 500
+
+        # ✅ SAVE CACHE
         cache[text_hash] = output
 
         return jsonify(output)
 
     except Exception as e:
+        print("❌ ERROR:", str(e))
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/")
 def home():
-    return "🔥 Optimized Email API Running"
+    return "🔥 Email Phishing API Running Successfully"
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
