@@ -5,16 +5,13 @@ import hashlib
 
 app = Flask(__name__)
 
-# 🔥 CHANGE MODEL HERE (IMPORTANT)
-API_URL = "https://api-inference.huggingface.co/models/ealvaradob/bert-finetuned-phishing"
-
+API_URL = "https://api-inference.huggingface.co/models/mrm8488/distilbert-base-uncased-finetuned-phishing"
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 headers = {
     "Authorization": f"Bearer {HF_TOKEN}"
 }
 
-# 🔥 CACHE
 cache = {}
 
 def get_hash(text):
@@ -23,6 +20,10 @@ def get_hash(text):
 @app.route("/scan_email", methods=["POST"])
 def scan_email():
     data = request.get_json()
+
+    if not data:
+        return jsonify({"error": "No JSON received"}), 400
+
     text = data.get("text", "")
 
     if not text:
@@ -30,7 +31,6 @@ def scan_email():
 
     text_hash = get_hash(text)
 
-    # ✅ CACHE HIT
     if text_hash in cache:
         return jsonify(cache[text_hash])
 
@@ -40,26 +40,24 @@ def scan_email():
         hf_output = response.json()
         print("🔥 HF RAW:", hf_output)
 
-        # ❌ HANDLE HF ERROR (VERY IMPORTANT)
-        if isinstance(hf_output, dict) and "error" in hf_output:
-            return jsonify({"error": hf_output["error"]}), 500
+        # 🔥 HANDLE ERROR RESPONSE
+        if isinstance(hf_output, dict):
+            return jsonify({"error": hf_output}), 500
 
-        # ✅ SAFE PARSING
-        if isinstance(hf_output, list) and len(hf_output) > 0:
-            result = hf_output[0][0]
+        if not hf_output or not isinstance(hf_output, list):
+            return jsonify({"error": "Invalid response from model"}), 500
 
-            label = result.get("label", "safe")
-            score = result.get("score", 0)
+        # 🔥 SAFE PARSING
+        result = hf_output[0][0] if isinstance(hf_output[0], list) else hf_output[0]
 
-            output = {
-                "email_prediction": 1 if "phishing" in label.lower() else 0,
-                "confidence": round(score * 100, 2)
-            }
+        label = result.get("label", "unknown").lower()
+        score = result.get("score", 0)
 
-        else:
-            return jsonify({"error": "Invalid model response"}), 500
+        output = {
+            "email_prediction": 1 if "phish" in label else 0,
+            "confidence": round(score * 100, 2)
+        }
 
-        # ✅ CACHE SAVE
         cache[text_hash] = output
 
         return jsonify(output)
@@ -71,8 +69,7 @@ def scan_email():
 
 @app.route("/")
 def home():
-    return "🔥 Email Phishing API Running Successfully"
-
+    return "🔥 Email API Running"
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
