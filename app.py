@@ -31,26 +31,27 @@ def scan_email():
 
     text_hash = get_hash(text)
 
+    # cache hit
     if text_hash in cache:
         return jsonify(cache[text_hash])
 
     try:
         response = requests.post(API_URL, headers=headers, json={"inputs": text})
-
         hf_output = response.json()
+
         print("🔥 HF RAW:", hf_output)
 
-        # 🔥 HANDLE ERROR RESPONSE
+        # ❌ HF error handle
         if isinstance(hf_output, dict):
             return jsonify({"error": hf_output}), 500
 
-        if not hf_output or not isinstance(hf_output, list):
-            return jsonify({"error": "Invalid response from model"}), 500
+        if not hf_output:
+            return jsonify({"error": "Empty response from model"}), 500
 
-        # 🔥 SAFE PARSING
+        # ✅ safe parsing
         result = hf_output[0][0] if isinstance(hf_output[0], list) else hf_output[0]
 
-        label = result.get("label", "unknown").lower()
+        label = result.get("label", "").lower()
         score = result.get("score", 0)
 
         output = {
@@ -69,7 +70,8 @@ def scan_email():
 
 @app.route("/")
 def home():
-    return "🔥 Email API Running"
+    return "🔥 Email Phishing API Running Successfully"
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
