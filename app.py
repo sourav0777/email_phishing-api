@@ -5,7 +5,9 @@ import hashlib
 
 app = Flask(__name__)
 
-API_URL = "https://api-inference.huggingface.co/models/mrm8488/distilbert-base-uncased-finetuned-phishing"
+# 🔥 CHANGE MODEL HERE (IMPORTANT)
+API_URL = "https://api-inference.huggingface.co/models/ealvaradob/bert-finetuned-phishing"
+
 HF_TOKEN = os.getenv("HF_TOKEN")
 
 headers = {
@@ -38,22 +40,26 @@ def scan_email():
         hf_output = response.json()
         print("🔥 HF RAW:", hf_output)
 
+        # ❌ HANDLE HF ERROR (VERY IMPORTANT)
+        if isinstance(hf_output, dict) and "error" in hf_output:
+            return jsonify({"error": hf_output["error"]}), 500
+
         # ✅ SAFE PARSING
         if isinstance(hf_output, list) and len(hf_output) > 0:
-            result = hf_output[0][0]  # 🔥 FIXED
+            result = hf_output[0][0]
 
-            label = result.get("label", "unknown")
+            label = result.get("label", "safe")
             score = result.get("score", 0)
 
             output = {
-                "email_prediction": 1 if label.lower() == "phishing" else 0,
+                "email_prediction": 1 if "phishing" in label.lower() else 0,
                 "confidence": round(score * 100, 2)
             }
 
         else:
             return jsonify({"error": "Invalid model response"}), 500
 
-        # ✅ SAVE CACHE
+        # ✅ CACHE SAVE
         cache[text_hash] = output
 
         return jsonify(output)
